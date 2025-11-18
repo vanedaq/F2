@@ -58,6 +58,7 @@ class Finanzas {
       addCredito: document.getElementById("addCredito"),
       addCompra: document.getElementById("addCompra"),
       addAhorro2: document.getElementById("addAhorro2"),
+      addContribucion: document.getElementById("addContribucion"),
       duplicate: document.getElementById("duplicateBtn"),
       duplicateTo: document.getElementById("duplicateToBtn"),
       closeMonth: document.getElementById("closeMonthBtn"),
@@ -83,6 +84,7 @@ class Finanzas {
       if(k==="addCredito") el.onclick=()=>this.openForm("credito");
       if(k==="addCompra") el.onclick=()=>this.openForm("compra");
       if(k==="addAhorro2") el.onclick=()=>this.openForm("ahorro");
+      if(k==="addContribucion") el.onclick=()=>this.openForm("contribucion");
       if(k==="duplicate") el.onclick=()=>this.duplicateToNextMonth();
       if(k==="duplicateTo") el.onclick=()=>this.duplicateToChosenMonth();
       if(k==="closeMonth") el.onclick=()=>this.toggleCloseMonth();
@@ -127,6 +129,7 @@ class Finanzas {
     markAll("markAllTarjetas","tarjetas");
     markAll("markAllCreditos","creditos");
     markAll("markAllCompras","gastosCompras");
+    markAll("markAllContribuciones","contribuciones");
   }
 
   showTab(name){
@@ -145,7 +148,8 @@ class Finanzas {
       tarjetas:[],
       creditos:[],
       gastosCompras:[{id:this.uid(),nombre:"Supermercado",monto:400000,fecha:"10",paid:false}],
-      ahorros:[{id:this.uid(),nombre:"Emergencias",meta:5000000,actual:1200000,fecha:"01"}]
+      ahorros:[{id:this.uid(),nombre:"Emergencias",meta:5000000,actual:1200000,fecha:"01"}],
+      contribuciones:[]
     };
     return seed;
   }
@@ -168,6 +172,11 @@ class Finanzas {
   }
 
   ensureMonth(key){
+    // Migrar datos antiguos que no tienen contribuciones
+    if(this.data[key] && !this.data[key].contribuciones){
+      this.data[key].contribuciones = [];
+      this.save();
+    }
     if(this.data[key]) return;
     
     // Buscar mes anterior para copiar datos
@@ -207,7 +216,7 @@ class Finanzas {
       this.toast(`Datos copiados de ${meses[parseInt(prevKey)]} - Cuotas actualizadas automáticamente`);
     }else{
       // Si no hay datos previos, crear estructura vacía
-      this.data[key]={ingresos:[],gastosFijos:[],tarjetas:[],creditos:[],gastosCompras:[],ahorros:[]};
+      this.data[key]={ingresos:[],gastosFijos:[],tarjetas:[],creditos:[],gastosCompras:[],ahorros:[],contribuciones:[]};
     }
     this.save();
   }
@@ -226,7 +235,8 @@ class Finanzas {
       (exists.tarjetas&&exists.tarjetas.length) ||
       (exists.creditos&&exists.creditos.length) ||
       (exists.gastosCompras&&exists.gastosCompras.length) ||
-      (exists.ahorros&&exists.ahorros.length)
+      (exists.ahorros&&exists.ahorros.length) ||
+      (exists.contribuciones&&exists.contribuciones.length)
     );
     if(hasData && !confirm("El próximo mes ya tiene datos. ¿Reemplazar con una copia del mes actual?")){
       return;
@@ -239,7 +249,7 @@ class Finanzas {
           const it=Object.assign({}, item);
           it.id=this.uid();
           if(it.fecha) it.fecha = "01";
-          if(k === 'gastosFijos' || k === 'gastosCompras') it.paid=false;
+          if(k === 'gastosFijos' || k === 'gastosCompras' || k === 'contribuciones') it.paid=false;
           if(k === 'tarjetas' || k === 'creditos') {
             it.paid=false; // Resetear estado de pago mensual
             // Incrementar cuotas pagadas automáticamente
@@ -271,16 +281,16 @@ class Finanzas {
     const fromKey=this.mes, toKey=to, from=this.data[fromKey];
     if(!from){ this.toast("No hay datos para duplicar"); return; }
     const exists=this.data[toKey];
-    const hasData = exists && ((exists.ingresos&&exists.ingresos.length) || (exists.gastosFijos&&exists.gastosFijos.length) || (exists.tarjetas&&exists.tarjetas.length) || (exists.creditos&&exists.creditos.length) || (exists.gastosCompras&&exists.gastosCompras.length) || (exists.ahorros&&exists.ahorros.length));
+    const hasData = exists && ((exists.ingresos&&exists.ingresos.length) || (exists.gastosFijos&&exists.gastosFijos.length) || (exists.tarjetas&&exists.tarjetas.length) || (exists.creditos&&exists.creditos.length) || (exists.gastosCompras&&exists.gastosCompras.length) || (exists.ahorros&&exists.ahorros.length) || (exists.contribuciones&&exists.contribuciones.length));
     if(hasData && !confirm("Ese mes ya tiene datos. ¿Reemplazar?")) return;
     const copy = JSON.parse(JSON.stringify(from));
-    Object.keys(copy).forEach(k=>{ 
-      if(Array.isArray(copy[k])){ 
-        copy[k]=copy[k].map(item=>{ 
-          const it={...item}; 
-          it.id=this.uid(); 
-          if(it.fecha) it.fecha="01"; 
-          if(k==='gastosFijos'||k==='gastosCompras') it.paid=false; 
+    Object.keys(copy).forEach(k=>{
+      if(Array.isArray(copy[k])){
+        copy[k]=copy[k].map(item=>{
+          const it={...item};
+          it.id=this.uid();
+          if(it.fecha) it.fecha="01";
+          if(k==='gastosFijos'||k==='gastosCompras'||k==='contribuciones') it.paid=false;
           if(k==='tarjetas'||k==='creditos') {
             it.paid=false; // Resetear estado de pago mensual
             // Incrementar cuotas pagadas automáticamente
@@ -288,8 +298,8 @@ class Finanzas {
               it.cuotasPagadas = Math.min(it.numeroCuotas, (it.cuotasPagadas || 0) + 1);
             }
           }
-          return it; 
-        }); 
+          return it;
+        });
       }
     });
     this.data[toKey]=copy; this.mes=toKey; localStorage.setItem(this.selKey,this.mes); if(this.sel) this.sel.value=this.mes; this.save(); this.renderAll(); this.toast(`Mes duplicado a ${nombre[parseInt(toKey)]} - Cuotas actualizadas automáticamente`);
@@ -406,6 +416,7 @@ class Finanzas {
     this.renderList("listaCreditos", d.creditos, i=>this.rowCredito(i,"creditos"));
     this.renderList("listaCompras", d.gastosCompras, i=>this.rowGeneric("🛒",i,"gastosCompras",i.monto));
     this.renderList("listaAhorros", d.ahorros, i=>this.rowAhorro(i,"ahorros"));
+    this.renderList("listaContribuciones", d.contribuciones||[], i=>this.rowGeneric("🤝",i,"contribuciones",i.monto));
 
     const totalIng = d.ingresos.reduce((s,x)=>s+(x.monto||0),0);
     const totalFix = d.gastosFijos.reduce((s,x)=>s+(x.monto||0),0);
@@ -413,6 +424,7 @@ class Finanzas {
     const totalCre = d.creditos.reduce((s,x)=>s+(x.cuotaMensual||0),0);
     const totalCom = d.gastosCompras.reduce((s,x)=>s+(x.monto||0),0);
     const totalAho = d.ahorros.reduce((s,x)=>s+(x.actual||0),0);
+    const totalCon = (d.contribuciones||[]).reduce((s,x)=>s+(x.monto||0),0);
     const totalG = totalFix + totalTar + totalCre + totalCom;
     const libre = totalIng - totalG;
 
@@ -420,6 +432,7 @@ class Finanzas {
     set("sumIngresos",fmt(totalIng)); set("sumFijos",fmt(totalFix));
     set("sumTarjetas",fmt(totalTar)); set("sumCreditos",fmt(totalCre));
     set("sumCompras",fmt(totalCom)); set("sumAhorros",fmt(totalAho));
+    set("sumContribuciones",fmt(totalCon));
     set("sumGastos",fmt(totalG)); set("sumLibre",fmt(libre));
 
     this.renderDashboard(totalIng,totalG,libre);
@@ -575,6 +588,11 @@ class Finanzas {
       fields= f("nombre","text","Nombre","")
             + f("monto","number","Monto","","step='1' min='0'")
             + f("fecha","text","Día del mes","01","pattern='[0-3][0-9]' maxlength='2'");
+    }else if(tipo==="contribucion"){
+      title="Nueva Contribución Externa";
+      fields= f("nombre","text","Nombre/Persona","")
+            + f("monto","number","Monto","","step='1' min='0'")
+            + f("fecha","text","Día del mes","01","pattern='[0-3][0-9]' maxlength='2'");
     }else if(tipo==="fijo"){
       title="Nuevo Gasto Fijo";
       fields= f("nombre","text","Nombre","")
@@ -616,6 +634,8 @@ class Finanzas {
 
       if(tipo==="ingreso"){
         d.ingresos.push({id:this.uid(),nombre:vals.nombre,monto:n(vals.monto),fecha:vals.fecha});
+      }else if(tipo==="contribucion"){
+        d.contribuciones.push({id:this.uid(),nombre:vals.nombre,monto:n(vals.monto),fecha:vals.fecha,paid:false});
       }else if(tipo==="fijo"){
         d.gastosFijos.push({id:this.uid(),nombre:vals.nombre,monto:n(vals.monto),fecha:vals.fecha,paid:false});
       }else if(tipo==="compra"){
@@ -649,9 +669,16 @@ class Finanzas {
     );
     let title="Editar", fields="";
     if(!isDeuda && key!=="ahorros"){
-      fields= f("nombre","text","Nombre",it.nombre)
-            + f("monto","number","Monto",it.monto,"step='1' min='0'")
-            + f("fecha","text","Día del mes",it.fecha||"01","pattern='[0-3][0-9]' maxlength='2'");
+      if(key==="contribuciones"){
+        title="Editar Contribución";
+        fields= f("nombre","text","Nombre/Persona",it.nombre)
+              + f("monto","number","Monto",it.monto,"step='1' min='0'")
+              + f("fecha","text","Día del mes",it.fecha||"01","pattern='[0-3][0-9]' maxlength='2'");
+      }else{
+        fields= f("nombre","text","Nombre",it.nombre)
+              + f("monto","number","Monto",it.monto,"step='1' min='0'")
+              + f("fecha","text","Día del mes",it.fecha||"01","pattern='[0-3][0-9]' maxlength='2'");
+      }
     }else if(key==="ahorros"){
       title="Editar Meta";
       fields= f("nombre","text","Nombre",it.nombre)
